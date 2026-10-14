@@ -41,14 +41,11 @@ engine: AsyncEngine = create_async_engine(
 def set_sqlite_pragma(dbapi_connection, connection_record):
     """Apply high-performance SQLite PRAGMAs on every connection."""
     cursor = dbapi_connection.cursor()
-    # Write-Ahead Logging allows concurrent readers and single writer without blocking
     cursor.execute("PRAGMA journal_mode=WAL;")
-    # Synchronous NORMAL ensures durability across application crashes while boosting IOPS
     cursor.execute("PRAGMA synchronous=NORMAL;")
-    # Busy timeout ensures transactions wait up to 10s for write locks instead of failing
-    cursor.execute("PRAGMA busy_timeout=10000;")
-    # Cache size in KiB (-64000 = 64MB)
+    cursor.execute("PRAGMA busy_timeout=30000;")
     cursor.execute("PRAGMA cache_size=-64000;")
+    cursor.execute("PRAGMA wal_autocheckpoint=1000;")
     cursor.execute("PRAGMA foreign_keys=ON;")
     cursor.close()
 
