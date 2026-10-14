@@ -1,0 +1,95 @@
+version: '3.8'
+
+services:
+  # Mock Posting Service as provided in the PDF specification
+  mock-posting-service:
+    image: vinhopenfabric/mock-posting-service:latest
+    container_name: mock-posting-service
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/health || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # Redis Queue Server
+  redis:
+    image: redis:7-alpine
+    container_name: redis-queue
+    ports:
+      - "6379:6379"
+    command: ["redis-server", "--appendonly", "yes"]
+    restart: unless-stopped
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # Transaction Processing FastAPI Service
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: transaction-api
+    ports:
+      - "8000:8000"
+    command: >
+      sh -c "alembic upgrade head &&
+             uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2"
+    restart: unless-stopped
+    volumes:
+      - ./data:/app/data
+    environment:
+      - APP_ENV=production
+      - LOG_LEVEL=INFO
+      - DATABASE_URL=sqlite+aiosqlite:////app/data/transactions.db
+      - SYNC_DATABASE_URL=sqlite:////app/data/transactions.db
+      - REDIS_URL=redis://redis:6379/0
+      - REDIS_QUEUE_NAME=transaction_processing_queue
+      - MOCK_POSTING_SERVICE_URL=http://mock-posting-service:8080
+      - POSTING_REQUEST_TIMEOUT_SECONDS=15.0
+      - MAX_RETRY_ATTEMPTS=5
+      - INITIAL_BACKOFF_SECONDS=1.0
+      - MAX_BACKOFF_SECONDS=30.0
+      - BACKOFF_MULTIPLIER=2.0
+    depends_on:
+      redis:
+        condition: service_healthy
+      mock-posting-service:
+        condition: service_started
+
+  # Dedicated Background Worker Process
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: transaction-worker
+    command: ["python", "-m", "app.workers.run_worker"]
+    restart: unless-stopped
+    volumes:
+      - ./data:/app/data
+    environment:
+      - APP_ENV=production
+      - LOG_LEVEL=INFO
+      - DATABASE_URL=sqlite+aiosqlite:////app/data/transactions.db
+      - SYNC_DATABASE_URL=sqlite:////app/data/transactions.db
+      - REDIS_URL=redis://redis:6379/0
+      - REDIS_QUEUE_NAME=transaction_processing_queue
+      - MOCK_POSTING_SERVICE_URL=http://mock-posting-service:8080
+      - POSTING_REQUEST_TIMEOUT_SECONDS=15.0
+      - WORKER_CONCURRENCY=5
+      - PROCESSING_LEASE_TIMEOUT_SECONDS=30.0
+      - RECONCILIATION_INTERVAL_SECONDS=5.0
+    depends_on:
+      redis:
+        condition: service_healthy
+      api:
+        condition: service_started
+
+volumes:
+  redis-data:
