@@ -1,3 +1,9 @@
+"""High-concurrency async benchmark for transaction ingestion performance measurement.
+
+Measures throughput (req/sec), sub-100ms submission latency compliance,
+and error rate under realistic concurrent load without artificial throttling.
+"""
+
 import asyncio
 from datetime import datetime, timezone
 import random
@@ -13,7 +19,9 @@ async def worker_task(
     base_url: str,
     total_per_worker: int,
     results: list[dict[str, Any]],
+    include_duplicates: bool = True,
 ) -> None:
+    """Submit transactions concurrently without artificial throttling delays."""
     for i in range(total_per_worker):
         payload = {
             "id": str(uuid.uuid4()),
@@ -24,7 +32,14 @@ async def worker_task(
             "metadata": {"batch": "benchmark", "seq": i},
         }
 
-        for kind in ("new", "duplicate") if random.random() < 0.05 else ("new",):
+        # ~5% duplicate injection to test idempotency
+        kinds = (
+            ("new", "duplicate")
+            if (include_duplicates and random.random() < 0.05)
+            else ("new",)
+        )
+
+        for kind in kinds:
             t0 = time.perf_counter()
             try:
                 response = await client.post(
@@ -48,8 +63,7 @@ async def worker_task(
                         "error": str(exc),
                     }
                 )
-
-        await asyncio.sleep(0.01)
+        # No artificial sleep — measure raw system throughput
 
 
 def percentile(values: list[float], p: float) -> float:
@@ -61,13 +75,19 @@ def percentile(values: list[float], p: float) -> float:
 
 async def run_benchmark(
     base_url: str = "http://127.0.0.1:8000",
-    concurrency: int = 10,
+    concurrency: int = 50,
     requests_per_worker: int = 20,
 ) -> dict[str, Any]:
+    """Run concurrent load test with no artificial throttling."""
     results: list[dict[str, Any]] = []
     limits = httpx.Limits(
         max_keepalive_connections=concurrency,
         max_connections=concurrency * 2,
+    )
+
+    print(
+        f"\nStarting benchmark: {concurrency} concurrent workers × "
+        f"{requests_per_worker} requests = {concurrency * requests_per_worker} total"
     )
 
     start = time.perf_counter()
@@ -88,9 +108,11 @@ async def run_benchmark(
     successful_duplicates = [r for r in duplicates if r["status_code"] == 200]
     successful_responses = [r for r in results if r["status_code"] in (200, 202)]
     latencies = [r["latency_ms"] for r in successful_responses]
+    sub_100ms = [lat for lat in latencies if lat < 100.0]
 
     print("\n-------------- BENCHMARK RESULTS --------------")
     print(f"Duration:                  {duration:.2f} seconds")
+    print(f"Concurrency:               {concurrency} workers")
     print(f"Total HTTP requests:       {len(results)}")
     print(f"New submissions accepted:  {len(successful_new)}")
     print(f"Duplicate responses:       {len(successful_duplicates)}")
@@ -100,23 +122,34 @@ async def run_benchmark(
     print(
         f"Successful response rate:  {len(successful_responses) / max(len(results), 1) * 100:.2f}%"
     )
-    print(
-        f"Average latency:            {statistics.mean(latencies) if latencies else 0:.2f} ms"
-    )
-    for p in (0.50, 0.90, 0.95, 0.99):
+    if latencies:
+        print(f"Average latency:           {statistics.mean(latencies):.2f} ms")
+        for p in (0.50, 0.90, 0.95, 0.99):
+            mark = " ✓ <100ms" if percentile(latencies.copy(), p) < 100 else ""
+            print(
+                f"p{int(p * 100):<2} latency:              {percentile(latencies.copy(), p):.2f} ms{mark}"
+            )
+        sub_pct = len(sub_100ms) / len(latencies) * 100
         print(
-            f"p{int(p * 100):<2} latency:                 {percentile(latencies.copy(), p):.2f} ms"
+            f"Requests <100ms:           {len(sub_100ms)}/{len(latencies)} ({sub_pct:.1f}%)"
         )
     print("-----------------------------------------------")
 
     return {
         "duration_seconds": round(duration, 2),
+        "concurrency": concurrency,
         "http_requests": len(results),
         "new_transactions_accepted": len(successful_new),
         "duplicate_responses": len(successful_duplicates),
+        "failed": len(results) - len(successful_responses),
         "http_requests_per_second": round(len(results) / duration, 2),
         "new_transactions_per_second": round(len(successful_new) / duration, 2),
+        "avg_ms": round(statistics.mean(latencies), 2) if latencies else 0,
+        "p50_ms": round(percentile(latencies.copy(), 0.50), 2),
+        "p90_ms": round(percentile(latencies.copy(), 0.90), 2),
         "p95_ms": round(percentile(latencies.copy(), 0.95), 2),
+        "p99_ms": round(percentile(latencies.copy(), 0.99), 2),
+        "sub_100ms_pct": round(len(sub_100ms) / max(len(latencies), 1) * 100, 1),
     }
 
 
@@ -124,4 +157,8 @@ if __name__ == "__main__":
     import sys
 
     url = sys.argv[1] if len(sys.argv) > 1 else "http://127.0.0.1:8000"
-    asyncio.run(run_benchmark(url, concurrency=10, requests_per_worker=20))
+    concurrency = int(sys.argv[2]) if len(sys.argv) > 2 else 50
+    per_worker = int(sys.argv[3]) if len(sys.argv) > 3 else 20
+    asyncio.run(
+        run_benchmark(url, concurrency=concurrency, requests_per_worker=per_worker)
+    )

@@ -16,7 +16,6 @@ class TransactionRepository:
     ) -> TransactionModel:
         """Persist a new transaction entity."""
         session.add(transaction)
-        await session.flush()
         return transaction
 
     async def get_by_id(

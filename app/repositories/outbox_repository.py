@@ -16,7 +16,6 @@ class OutboxRepository:
     ) -> OutboxModel:
         """Persist a new outbox event."""
         session.add(outbox_event)
-        await session.flush()
         return outbox_event
 
     async def get_pending_events(
