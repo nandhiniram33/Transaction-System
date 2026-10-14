@@ -1,14 +1,12 @@
 """API route handlers for transaction submission and status queries."""
 
-import asyncio
 import time
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.logging import correlation_id_ctx, get_logger
-from app.database.db import async_session_maker, get_db_session
+from app.database.db import get_db_session
 from app.monitoring.metrics import metrics_collector
-from app.queue.dispatcher import outbox_dispatcher
 from app.schemas.transaction import (
     TransactionCreateRequest,
     TransactionResponse,

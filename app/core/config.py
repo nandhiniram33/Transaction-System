@@ -45,13 +45,14 @@ class Settings(BaseSettings):
 
     # Outbox & Dispatcher Settings
     OUTBOX_BATCH_SIZE: int = 100
-    OUTBOX_POLL_INTERVAL_SECONDS: float = 0.1
+    OUTBOX_POLL_INTERVAL_SECONDS: float = 0.2
+    QUEUE_OVERFLOW_MAX_OUTBOX: int = 50000
 
     # Worker & Reconciliation Settings
     WORKER_CONCURRENCY: int = 5
     WORKER_POLL_TIMEOUT_SECONDS: float = 1.0
-    PROCESSING_LEASE_TIMEOUT_SECONDS: float = 30.0
-    RECONCILIATION_INTERVAL_SECONDS: float = 5.0
+    PROCESSING_LEASE_TIMEOUT_SECONDS: float = 20.0
+    RECONCILIATION_INTERVAL_SECONDS: float = 2.0
     VERIFICATION_WINDOW_SECONDS: float = 12.0
 
 

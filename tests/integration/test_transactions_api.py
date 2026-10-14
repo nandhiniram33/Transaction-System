@@ -106,3 +106,38 @@ async def test_validation_errors(async_client: AsyncClient):
         },
     )
     assert res.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_sub_100ms_submission_latency_batch(async_client: AsyncClient):
+    """Scenario: Submit 50 transactions to verify strict sub-100ms SLA.
+    
+    Verifies that 100% of responses return HTTP 202 Accepted,
+    with an average latency well under 50ms and maximum latency strictly < 100ms.
+    """
+    latencies = []
+    for i in range(50):
+        payload = {
+            "id": str(uuid.uuid4()),
+            "amount": float(100.0 + i),
+            "currency": "USD",
+            "description": f"SLA verification batch {i}",
+            "timestamp": "2026-10-12T10:00:00Z",
+        }
+        start = time.perf_counter()
+        resp = await async_client.post("/api/transactions", json=payload)
+        elapsed_ms = (time.perf_counter() - start) * 1000.0
+
+        assert resp.status_code == 202
+        latencies.append(elapsed_ms)
+
+    avg_ms = sum(latencies) / len(latencies)
+    sorted_lat = sorted(latencies)
+    p95_ms = sorted_lat[int(0.95 * len(sorted_lat))]
+    p99_ms = sorted_lat[-1]
+
+    # Strict SLA Assertions
+    assert avg_ms < 50.0, f"Average latency {avg_ms:.2f}ms exceeded 50ms"
+    assert p95_ms < 80.0, f"p95 latency {p95_ms:.2f}ms exceeded 80ms"
+    assert p99_ms < 100.0, f"p99 latency {p99_ms:.2f}ms exceeded 100ms SLA target"
+

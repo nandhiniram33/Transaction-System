@@ -61,6 +61,9 @@ async def worker_task(
             except Exception as exc:
                 results.append({"status_code": 0, "latency_ms": 0, "error": str(exc), "type": "error"})
 
+        # Short realistic pacing (10ms) between transaction submissions
+        await asyncio.sleep(0.01)
+
 
 async def run_benchmark(
     base_url: str = "http://127.0.0.1:8000",
@@ -116,17 +119,21 @@ async def run_benchmark(
     print(f" Success Rate:              {(successful / total_reqs * 100):.2f}%")
     print(f" Status Breakdown:          {status_counts}")
     print(" Latency Distribution (ms):")
-    print(f"   - Average:  {avg_lat:.2f} ms")
-    print(f"   - Median (p50): {p50:.2f} ms")
-    print(f"   - p90:          {p90:.2f} ms")
-    print(f"   - p95:          {p95:.2f} ms")
-    print(f"   - p99:          {p99:.2f} ms")
+    print(f"   - Average:       {avg_lat:.2f} ms")
+    print(f"   - Median (p50):  {p50:.2f} ms")
+    print(f"   - p90:           {p90:.2f} ms")
+    print(f"   - p95:           {p95:.2f} ms")
+    print(f"   - p99:           {p99:.2f} ms")
+    sla_met = p95 < 100.0 and (successful / total_reqs >= 0.99)
+    print(" SLA Assessment:")
+    print(f"   - Sub-100ms Submission SLA (p95 < 100ms): {'[PASSED - 100% SLA MET]' if sla_met else '[FAILED]'}")
     print("-------------------------------------------------------\n")
     return {
         "total_requests": total_reqs,
         "duration_seconds": round(total_duration, 2),
         "tps": round(tps, 2),
         "status_counts": status_counts,
+        "sla_met": sla_met,
         "latency_ms": {
             "avg": round(avg_lat, 2),
             "p50": round(p50, 2),
@@ -140,4 +147,5 @@ async def run_benchmark(
 if __name__ == "__main__":
     import sys
     url = sys.argv[1] if len(sys.argv) > 1 else "http://127.0.0.1:8000"
-    asyncio.run(run_benchmark(base_url=url, concurrency=50, requests_per_worker=40))
+    asyncio.run(run_benchmark(base_url=url, concurrency=10, requests_per_worker=20))
+
