@@ -7,10 +7,14 @@ from httpx import AsyncClient
 
 
 @pytest.mark.asyncio
-async def test_submit_transaction_accepted(async_client: AsyncClient, sample_transaction_payload: dict):
+async def test_submit_transaction_accepted(
+    async_client: AsyncClient, sample_transaction_payload: dict
+):
     """Verify newly submitted transaction returns 202 Accepted within 100ms."""
     start_time = time.perf_counter()
-    response = await async_client.post("/api/transactions", json=sample_transaction_payload)
+    response = await async_client.post(
+        "/api/transactions", json=sample_transaction_payload
+    )
     elapsed_ms = (time.perf_counter() - start_time) * 1000.0
 
     assert response.status_code == 202
@@ -24,10 +28,14 @@ async def test_submit_transaction_accepted(async_client: AsyncClient, sample_tra
 
 
 @pytest.mark.asyncio
-async def test_get_transaction_by_id(async_client: AsyncClient, sample_transaction_payload: dict):
+async def test_get_transaction_by_id(
+    async_client: AsyncClient, sample_transaction_payload: dict
+):
     """Verify querying an existing transaction by ID."""
     # First submit
-    post_res = await async_client.post("/api/transactions", json=sample_transaction_payload)
+    post_res = await async_client.post(
+        "/api/transactions", json=sample_transaction_payload
+    )
     assert post_res.status_code == 202
     tx_id = sample_transaction_payload["id"]
 
@@ -50,7 +58,9 @@ async def test_get_unknown_transaction_returns_404(async_client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_identical_duplicate_handling(async_client: AsyncClient, sample_transaction_payload: dict):
+async def test_identical_duplicate_handling(
+    async_client: AsyncClient, sample_transaction_payload: dict
+):
     """Verify submitting the identical payload returns existing transaction without error."""
     # Initial submission
     res1 = await async_client.post("/api/transactions", json=sample_transaction_payload)
@@ -63,7 +73,9 @@ async def test_identical_duplicate_handling(async_client: AsyncClient, sample_tr
 
 
 @pytest.mark.asyncio
-async def test_conflicting_payload_detection(async_client: AsyncClient, sample_transaction_payload: dict):
+async def test_conflicting_payload_detection(
+    async_client: AsyncClient, sample_transaction_payload: dict
+):
     """Verify submitting conflicting payload with same ID returns HTTP 409 Conflict."""
     # Initial submission
     res1 = await async_client.post("/api/transactions", json=sample_transaction_payload)
@@ -75,7 +87,10 @@ async def test_conflicting_payload_detection(async_client: AsyncClient, sample_t
 
     res2 = await async_client.post("/api/transactions", json=conflicting_payload)
     assert res2.status_code == 409
-    assert "different payload" in res2.json()["detail"].lower() or "conflict" in res2.json()["detail"].lower()
+    assert (
+        "different payload" in res2.json()["detail"].lower()
+        or "conflict" in res2.json()["detail"].lower()
+    )
 
 
 @pytest.mark.asyncio
@@ -111,7 +126,7 @@ async def test_validation_errors(async_client: AsyncClient):
 @pytest.mark.asyncio
 async def test_sub_100ms_submission_latency_batch(async_client: AsyncClient):
     """Scenario: Submit 50 transactions to verify strict sub-100ms SLA.
-    
+
     Verifies that 100% of responses return HTTP 202 Accepted,
     with an average latency well under 50ms and maximum latency strictly < 100ms.
     """
@@ -140,4 +155,3 @@ async def test_sub_100ms_submission_latency_batch(async_client: AsyncClient):
     assert avg_ms < 50.0, f"Average latency {avg_ms:.2f}ms exceeded 50ms"
     assert p95_ms < 80.0, f"p95 latency {p95_ms:.2f}ms exceeded 80ms"
     assert p99_ms < 100.0, f"p99 latency {p99_ms:.2f}ms exceeded 100ms SLA target"
-

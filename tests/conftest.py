@@ -86,4 +86,3 @@ def mock_client_app():
     client = posting_client.__class__(base_url="http://test")
     client._client = AsyncClient(transport=transport, base_url="http://test")
     return client
-

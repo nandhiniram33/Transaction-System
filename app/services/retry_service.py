@@ -29,9 +29,11 @@ class RetryService:
             jitter_enabled if jitter_enabled is not None else settings.JITTER_ENABLED
         )
 
-    def is_retryable_error(self, status_code: Optional[int], is_timeout: bool, is_network_error: bool) -> bool:
+    def is_retryable_error(
+        self, status_code: Optional[int], is_timeout: bool, is_network_error: bool
+    ) -> bool:
         """Distinguish transient/retryable errors from permanent client errors.
-        
+
         Permanent errors:
           - 400, 422: malformed data rejected by remote
           - 409: conflicting data
@@ -60,7 +62,7 @@ class RetryService:
 
     def calculate_backoff_seconds(self, retry_count: int) -> float:
         """Compute exponential backoff with full jitter: delay = uniform(0, min(max_backoff, initial * (multiplier^count)))."""
-        raw_backoff = self.initial_backoff * (self.multiplier ** retry_count)
+        raw_backoff = self.initial_backoff * (self.multiplier**retry_count)
         capped_backoff = min(self.max_backoff, raw_backoff)
 
         if self.jitter_enabled:

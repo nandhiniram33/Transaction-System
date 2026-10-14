@@ -69,7 +69,12 @@ async def submit_transaction(
             detail=str(exc),
         )
     except Exception as exc:
-        logger.error("Unhandled error accepting transaction %s: %s", payload.id, exc, exc_info=True)
+        logger.error(
+            "Unhandled error accepting transaction %s: %s",
+            payload.id,
+            exc,
+            exc_info=True,
+        )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error processing transaction",

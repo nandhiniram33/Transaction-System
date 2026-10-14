@@ -53,7 +53,9 @@ async def test_outbox_atomic_persistence_and_dispatch(db_session: AsyncSession):
 
 
 @pytest.mark.asyncio
-async def test_worker_end_to_end_successful_processing(db_session: AsyncSession, mock_client_app):
+async def test_worker_end_to_end_successful_processing(
+    db_session: AsyncSession, mock_client_app
+):
     """Verify worker picks up job, calls mock posting service, and completes transaction."""
     tx_id = str(uuid.uuid4())
     req = TransactionCreateRequest(

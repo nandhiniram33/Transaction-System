@@ -16,7 +16,9 @@ mock_db: List[Dict[str, Any]] = []
 SIMULATE_DELAY: bool = False
 MIN_DELAY_SECONDS: float = 0.05
 MAX_DELAY_SECONDS: float = 0.2
-FAILURE_MODE: Optional[str] = None  # None, "random_5_percent", "pre_write_failure", "post_write_failure", "timeout"
+FAILURE_MODE: Optional[str] = (
+    None  # None, "random_5_percent", "pre_write_failure", "post_write_failure", "timeout"
+)
 
 
 class RemoteTransactionPayload(BaseModel):
@@ -95,7 +97,9 @@ async def get_transaction(transaction_id: str):
         if record["id"] == transaction_id:
             return record
 
-    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Transaction not found")
+    raise HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND, detail="Transaction not found"
+    )
 
 
 @app.get("/transactions")

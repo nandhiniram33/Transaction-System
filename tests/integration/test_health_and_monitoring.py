@@ -20,7 +20,9 @@ async def test_health_check_healthy(async_client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_metrics_endpoint(async_client: AsyncClient, sample_transaction_payload: dict):
+async def test_metrics_endpoint(
+    async_client: AsyncClient, sample_transaction_payload: dict
+):
     """Verify metrics collector records requests and exposes latency distribution."""
     # Send a transaction to register metrics
     await async_client.post("/api/transactions", json=sample_transaction_payload)

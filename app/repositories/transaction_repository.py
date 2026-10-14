@@ -11,13 +11,17 @@ from app.models.transaction import TransactionModel
 class TransactionRepository:
     """Repository handling transaction persistence, atomic state transitions, and leases."""
 
-    async def create(self, session: AsyncSession, transaction: TransactionModel) -> TransactionModel:
+    async def create(
+        self, session: AsyncSession, transaction: TransactionModel
+    ) -> TransactionModel:
         """Persist a new transaction entity."""
         session.add(transaction)
         await session.flush()
         return transaction
 
-    async def get_by_id(self, session: AsyncSession, transaction_id: str) -> Optional[TransactionModel]:
+    async def get_by_id(
+        self, session: AsyncSession, transaction_id: str
+    ) -> Optional[TransactionModel]:
         """Fetch transaction by UUID."""
         stmt = select(TransactionModel).where(TransactionModel.id == transaction_id)
         result = await session.execute(stmt)
@@ -31,7 +35,7 @@ class TransactionRepository:
         lease_expires_at: datetime,
     ) -> bool:
         """Atomically claim a transaction for worker execution.
-        
+
         Succeeds only if the transaction is pending, or if an existing lease has expired.
         Returns True if claim succeeded, False if already claimed or finished.
         """
@@ -146,10 +150,9 @@ class TransactionRepository:
 
     async def get_status_counts(self, session: AsyncSession) -> Dict[str, int]:
         """Aggregate counts of transactions grouped by status."""
-        stmt = (
-            select(TransactionModel.status, func.count(TransactionModel.id))
-            .group_by(TransactionModel.status)
-        )
+        stmt = select(
+            TransactionModel.status, func.count(TransactionModel.id)
+        ).group_by(TransactionModel.status)
         result = await session.execute(stmt)
         counts = {"pending": 0, "processing": 0, "completed": 0, "failed": 0}
         for status, count in result.all():

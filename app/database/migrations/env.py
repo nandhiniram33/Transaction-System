@@ -6,6 +6,7 @@ from alembic import context
 
 from app.core.config import get_settings
 from app.models.base import Base
+
 # Import models to ensure they are registered on Base.metadata
 from app.models.transaction import TransactionModel  # noqa: F401
 from app.models.outbox import OutboxModel  # noqa: F401

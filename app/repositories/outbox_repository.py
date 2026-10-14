@@ -11,13 +11,17 @@ from app.models.outbox import OutboxModel
 class OutboxRepository:
     """Repository managing outbox events for guaranteed at-least-once dispatch."""
 
-    async def create(self, session: AsyncSession, outbox_event: OutboxModel) -> OutboxModel:
+    async def create(
+        self, session: AsyncSession, outbox_event: OutboxModel
+    ) -> OutboxModel:
         """Persist a new outbox event."""
         session.add(outbox_event)
         await session.flush()
         return outbox_event
 
-    async def get_pending_events(self, session: AsyncSession, limit: int = 100) -> List[OutboxModel]:
+    async def get_pending_events(
+        self, session: AsyncSession, limit: int = 100
+    ) -> List[OutboxModel]:
         """Fetch oldest undispatched outbox events."""
         stmt = (
             select(OutboxModel)

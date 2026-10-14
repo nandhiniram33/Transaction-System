@@ -100,7 +100,9 @@ async def test_stale_lease_reclaim(db_session: AsyncSession):
     await db_session.commit()
 
     new_lease = datetime.now(timezone.utc) + timedelta(seconds=30)
-    reclaimed = await repo.claim_transaction(db_session, tx_id, "active-worker", new_lease)
+    reclaimed = await repo.claim_transaction(
+        db_session, tx_id, "active-worker", new_lease
+    )
     await db_session.commit()
     assert reclaimed is True
 

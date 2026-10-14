@@ -1,4 +1,3 @@
-
 import asyncio
 from datetime import datetime, timezone
 import random
@@ -32,19 +31,23 @@ async def worker_task(
                     f"{base_url}/api/transactions", json=payload
                 )
                 elapsed = (time.perf_counter() - t0) * 1000
-                results.append({
-                    "type": kind,
-                    "status_code": response.status_code,
-                    "latency_ms": elapsed,
-                })
+                results.append(
+                    {
+                        "type": kind,
+                        "status_code": response.status_code,
+                        "latency_ms": elapsed,
+                    }
+                )
             except Exception as exc:
                 elapsed = (time.perf_counter() - t0) * 1000
-                results.append({
-                    "type": kind,
-                    "status_code": 0,
-                    "latency_ms": elapsed,
-                    "error": str(exc),
-                })
+                results.append(
+                    {
+                        "type": kind,
+                        "status_code": 0,
+                        "latency_ms": elapsed,
+                        "error": str(exc),
+                    }
+                )
 
         await asyncio.sleep(0.01)
 
@@ -71,23 +74,19 @@ async def run_benchmark(
     async with httpx.AsyncClient(
         limits=limits, timeout=httpx.Timeout(30.0, connect=5.0)
     ) as client:
-        await asyncio.gather(*[
-            worker_task(client, base_url, requests_per_worker, results)
-            for _ in range(concurrency)
-        ])
+        await asyncio.gather(
+            *[
+                worker_task(client, base_url, requests_per_worker, results)
+                for _ in range(concurrency)
+            ]
+        )
     duration = time.perf_counter() - start
 
     new_results = [r for r in results if r["type"] == "new"]
     duplicates = [r for r in results if r["type"] == "duplicate"]
-    successful_new = [
-        r for r in new_results if r["status_code"] == 202
-    ]
-    successful_duplicates = [
-        r for r in duplicates if r["status_code"] == 200
-    ]
-    successful_responses = [
-        r for r in results if r["status_code"] in (200, 202)
-    ]
+    successful_new = [r for r in new_results if r["status_code"] == 202]
+    successful_duplicates = [r for r in duplicates if r["status_code"] == 200]
+    successful_responses = [r for r in results if r["status_code"] in (200, 202)]
     latencies = [r["latency_ms"] for r in successful_responses]
 
     print("\n-------------- BENCHMARK RESULTS --------------")
@@ -98,10 +97,16 @@ async def run_benchmark(
     print(f"Failed/non-successful:     {len(results) - len(successful_responses)}")
     print(f"HTTP request throughput:   {len(results) / duration:.2f} req/sec")
     print(f"New-transaction throughput:{len(successful_new) / duration: .2f} tx/sec")
-    print(f"Successful response rate:  {len(successful_responses) / max(len(results), 1) * 100:.2f}%")
-    print(f"Average latency:            {statistics.mean(latencies) if latencies else 0:.2f} ms")
+    print(
+        f"Successful response rate:  {len(successful_responses) / max(len(results), 1) * 100:.2f}%"
+    )
+    print(
+        f"Average latency:            {statistics.mean(latencies) if latencies else 0:.2f} ms"
+    )
     for p in (0.50, 0.90, 0.95, 0.99):
-        print(f"p{int(p * 100):<2} latency:                 {percentile(latencies.copy(), p):.2f} ms")
+        print(
+            f"p{int(p * 100):<2} latency:                 {percentile(latencies.copy(), p):.2f} ms"
+        )
     print("-----------------------------------------------")
 
     return {

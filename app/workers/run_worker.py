@@ -44,7 +44,10 @@ async def main():
     # Also run reconciliation in the background
     tasks.append(asyncio.create_task(reconciliation_worker.run_loop()))
 
-    logger.info("Worker pool active with %d workers. Awaiting jobs...", settings.WORKER_CONCURRENCY)
+    logger.info(
+        "Worker pool active with %d workers. Awaiting jobs...",
+        settings.WORKER_CONCURRENCY,
+    )
 
     try:
         if sys.platform == "win32":

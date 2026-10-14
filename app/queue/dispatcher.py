@@ -30,7 +30,9 @@ class OutboxDispatcher:
 
     async def dispatch_cycle(self, session: AsyncSession) -> int:
         """Execute a single sweep of undispatched outbox records."""
-        events = await self.outbox_repo.get_pending_events(session, limit=self.batch_size)
+        events = await self.outbox_repo.get_pending_events(
+            session, limit=self.batch_size
+        )
         if not events:
             return 0
 
@@ -51,12 +53,16 @@ class OutboxDispatcher:
         dispatched_count = await self.queue.enqueue_batch(payloads)
         if dispatched_count > 0:
             # Mark successfully enqueued events in database
-            await self.outbox_repo.mark_dispatched(session, event_ids[:dispatched_count])
+            await self.outbox_repo.mark_dispatched(
+                session, event_ids[:dispatched_count]
+            )
             await session.commit()
             logger.info("Dispatched %d outbox events to Redis queue", dispatched_count)
             return dispatched_count
         else:
-            logger.warning("Queue unavailable; %d outbox events retained in DB", len(payloads))
+            logger.warning(
+                "Queue unavailable; %d outbox events retained in DB", len(payloads)
+            )
             await session.rollback()
             return 0
 

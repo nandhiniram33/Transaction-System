@@ -26,9 +26,11 @@ def mock_client_app():
 
 
 @pytest.mark.asyncio
-async def test_post_write_failure_recovery(db_session: AsyncSession, mock_client_app: PostingServiceClient):
+async def test_post_write_failure_recovery(
+    db_session: AsyncSession, mock_client_app: PostingServiceClient
+):
     """Scenario: Mock service commits the write, but returns HTTP 500 (Post-Write failure).
-    
+
     The worker should query GET /transactions/{id}, detect the transaction exists,
     and mark it completed without duplicating.
     """
@@ -71,9 +73,11 @@ async def test_post_write_failure_recovery(db_session: AsyncSession, mock_client
 
 
 @pytest.mark.asyncio
-async def test_pre_write_failure_schedules_retry(db_session: AsyncSession, mock_client_app: PostingServiceClient):
+async def test_pre_write_failure_schedules_retry(
+    db_session: AsyncSession, mock_client_app: PostingServiceClient
+):
     """Scenario: Mock service fails before writing (Pre-Write failure).
-    
+
     The worker queries GET /transactions/{id}, finds it absent, and schedules a retry
     with exponential backoff instead of blind re-posting.
     """

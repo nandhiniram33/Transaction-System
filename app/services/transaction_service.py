@@ -17,6 +17,7 @@ logger = get_logger(__name__)
 
 class ConflictException(Exception):
     """Raised when an incoming transaction reuses an ID with conflicting payload details."""
+
     pass
 
 
@@ -33,7 +34,7 @@ class TransactionService:
         request: TransactionCreateRequest,
     ) -> Tuple[TransactionModel, bool]:
         """Atomically persist a transaction and its outbox event.
-        
+
         Returns:
             Tuple[TransactionModel, bool]: (transaction, is_new)
             is_new is True for newly accepted transactions, False for identical duplicate submissions.
@@ -46,7 +47,9 @@ class TransactionService:
         existing = await self.tx_repo.get_by_id(session, request.id)
         if existing:
             if existing.payload_fingerprint == fingerprint:
-                logger.info("Identical duplicate transaction detected for ID %s", request.id)
+                logger.info(
+                    "Identical duplicate transaction detected for ID %s", request.id
+                )
                 return existing, False
             else:
                 logger.warning(

@@ -9,15 +9,50 @@ def test_classify_retryable_and_permanent_errors():
     service = RetryService(max_attempts=3)
 
     # Transient / Retryable
-    assert service.is_retryable_error(status_code=500, is_timeout=False, is_network_error=False) is True
-    assert service.is_retryable_error(status_code=503, is_timeout=False, is_network_error=False) is True
-    assert service.is_retryable_error(status_code=None, is_timeout=True, is_network_error=False) is True
-    assert service.is_retryable_error(status_code=None, is_timeout=False, is_network_error=True) is True
+    assert (
+        service.is_retryable_error(
+            status_code=500, is_timeout=False, is_network_error=False
+        )
+        is True
+    )
+    assert (
+        service.is_retryable_error(
+            status_code=503, is_timeout=False, is_network_error=False
+        )
+        is True
+    )
+    assert (
+        service.is_retryable_error(
+            status_code=None, is_timeout=True, is_network_error=False
+        )
+        is True
+    )
+    assert (
+        service.is_retryable_error(
+            status_code=None, is_timeout=False, is_network_error=True
+        )
+        is True
+    )
 
     # Permanent Client Errors (non-retryable)
-    assert service.is_retryable_error(status_code=400, is_timeout=False, is_network_error=False) is False
-    assert service.is_retryable_error(status_code=422, is_timeout=False, is_network_error=False) is False
-    assert service.is_retryable_error(status_code=409, is_timeout=False, is_network_error=False) is False
+    assert (
+        service.is_retryable_error(
+            status_code=400, is_timeout=False, is_network_error=False
+        )
+        is False
+    )
+    assert (
+        service.is_retryable_error(
+            status_code=422, is_timeout=False, is_network_error=False
+        )
+        is False
+    )
+    assert (
+        service.is_retryable_error(
+            status_code=409, is_timeout=False, is_network_error=False
+        )
+        is False
+    )
 
 
 def test_backoff_exponential_growth_and_cap():

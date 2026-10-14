@@ -25,7 +25,9 @@ class TransactionModel(Base):
     metadata_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Idempotency & Conflict Detection
-    payload_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    payload_fingerprint: Mapped[str] = mapped_column(
+        String(64), nullable=False, index=True
+    )
 
     # Lifecycle State
     status: Mapped[str] = mapped_column(

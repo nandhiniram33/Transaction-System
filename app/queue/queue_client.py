@@ -16,7 +16,9 @@ _fake_server: Optional[Any] = None
 class QueueClient:
     """Async Redis queue client supporting durable enqueue, batch enqueue, and dequeue."""
 
-    def __init__(self, redis_url: Optional[str] = None, queue_name: Optional[str] = None):
+    def __init__(
+        self, redis_url: Optional[str] = None, queue_name: Optional[str] = None
+    ):
         self.redis_url = redis_url or settings.REDIS_URL
         self.queue_name = queue_name or settings.REDIS_QUEUE_NAME
         self._redis: Optional[aioredis.Redis] = None
@@ -28,9 +30,12 @@ class QueueClient:
 
         if self.redis_url.startswith("fakeredis"):
             import fakeredis.aioredis
+
             if _fake_server is None:
                 _fake_server = fakeredis.FakeServer()
-            self._redis = fakeredis.aioredis.FakeRedis(server=_fake_server, decode_responses=True)
+            self._redis = fakeredis.aioredis.FakeRedis(
+                server=_fake_server, decode_responses=True
+            )
             self._is_fake = True
             logger.info("Connected to in-memory FakeRedis queue engine.")
             return
@@ -54,9 +59,12 @@ class QueueClient:
                 str(exc),
             )
             import fakeredis.aioredis
+
             if _fake_server is None:
                 _fake_server = fakeredis.FakeServer()
-            self._redis = fakeredis.aioredis.FakeRedis(server=_fake_server, decode_responses=True)
+            self._redis = fakeredis.aioredis.FakeRedis(
+                server=_fake_server, decode_responses=True
+            )
             self._is_fake = True
 
     async def is_connected(self) -> bool:
@@ -104,7 +112,9 @@ class QueueClient:
             await self.connect()
 
         try:
-            result = await self._redis.blpop([self.queue_name], timeout=int(max(1, timeout_seconds)))
+            result = await self._redis.blpop(
+                [self.queue_name], timeout=int(max(1, timeout_seconds))
+            )
             if result:
                 _, item_str = result
                 return json.loads(item_str)

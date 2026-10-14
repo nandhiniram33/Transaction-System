@@ -25,7 +25,9 @@ async def reset():
             resp = await client.post(mock_url)
             print(f"Mock cleanup response: {resp.status_code} - {resp.text}")
     except Exception as exc:
-        print(f"Could not reach mock service at {mock_url} ({exc}). Skipping remote cleanup.")
+        print(
+            f"Could not reach mock service at {mock_url} ({exc}). Skipping remote cleanup."
+        )
 
 
 if __name__ == "__main__":

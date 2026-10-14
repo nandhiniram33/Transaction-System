@@ -13,6 +13,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 class TransactionStatus(str, Enum):
     """Transaction lifecycle statuses as specified in the PDF."""
+
     PENDING = "pending"
     PROCESSING = "processing"
     COMPLETED = "completed"
@@ -85,7 +86,9 @@ class TransactionCreateRequest(BaseModel):
     def validate_currency(cls, value: str) -> str:
         upper = value.upper()
         if not CURRENCY_REGEX.match(upper):
-            raise ValueError("Currency must be a valid 3-letter ISO 4217 code (e.g. USD, EUR)")
+            raise ValueError(
+                "Currency must be a valid 3-letter ISO 4217 code (e.g. USD, EUR)"
+            )
         return upper
 
     @field_validator("timestamp")
@@ -118,9 +121,13 @@ class TransactionResponse(BaseModel):
 
     transaction_id: str = Field(alias="transactionId", description="Transaction UUID")
     status: TransactionStatus = Field(description="Transaction processing status")
-    submitted_at: datetime = Field(alias="submittedAt", description="Submission timestamp")
+    submitted_at: datetime = Field(
+        alias="submittedAt", description="Submission timestamp"
+    )
     completed_at: Optional[datetime] = Field(
-        default=None, alias="completedAt", description="Completion timestamp when available"
+        default=None,
+        alias="completedAt",
+        description="Completion timestamp when available",
     )
     error: Optional[str] = Field(default=None, description="Error message if failed")
 

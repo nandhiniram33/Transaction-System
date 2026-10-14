@@ -31,6 +31,4 @@ class OutboxModel(Base):
         DateTime(timezone=True), nullable=True
     )
 
-    __table_args__ = (
-        Index("ix_outbox_status_created", "status", "created_at"),
-    )
+    __table_args__ = (Index("ix_outbox_status_created", "status", "created_at"),)

@@ -49,9 +49,11 @@ class TransactionWorker:
             lease_expires_at=lease_expires_at,
         )
 
-    async def verify_remote_state(self, tx_id: str, max_wait_seconds: float = 12.0) -> bool:
+    async def verify_remote_state(
+        self, tx_id: str, max_wait_seconds: float = 12.0
+    ) -> bool:
         """Poll the remote service to confirm whether an ambiguous POST was eventually committed.
-        
+
         The mock posting service introduces a 2-10 second write delay. We safely poll
         over the delay window before determining whether the write genuinely failed.
         """
@@ -76,7 +78,9 @@ class TransactionWorker:
             logger.error("Received invalid job data missing 'id': %s", job_data)
             return False
 
-        logger.info("[%s] Beginning processing for transaction %s", self.worker_id, tx_id)
+        logger.info(
+            "[%s] Beginning processing for transaction %s", self.worker_id, tx_id
+        )
 
         # 1. Atomically claim lease in database
         async with async_session_maker() as session:
@@ -92,7 +96,10 @@ class TransactionWorker:
         # 2. Query Mock Service: GET /transactions/{id}
         get_res = await self.posting_client.get_transaction(tx_id)
         if get_res.success:
-            logger.info("Transaction %s already exists in posting service. Marking completed.", tx_id)
+            logger.info(
+                "Transaction %s already exists in posting service. Marking completed.",
+                tx_id,
+            )
             async with async_session_maker() as session:
                 await self.tx_repo.mark_completed(session, tx_id)
                 await session.commit()
@@ -133,7 +140,10 @@ class TransactionWorker:
         # Check immediately if it was a post-write failure
         immediate_check = await self.posting_client.get_transaction(tx_id)
         if immediate_check.success:
-            logger.info("Post-write failure confirmed for %s: transaction exists in remote store.", tx_id)
+            logger.info(
+                "Post-write failure confirmed for %s: transaction exists in remote store.",
+                tx_id,
+            )
             async with async_session_maker() as session:
                 await self.tx_repo.mark_completed(session, tx_id)
                 await session.commit()
@@ -145,12 +155,17 @@ class TransactionWorker:
             post_res.status_code, post_res.is_timeout, post_res.is_network_error
         )
 
-        if post_res.is_timeout or (post_res.status_code and post_res.status_code >= 500):
+        if post_res.is_timeout or (
+            post_res.status_code and post_res.status_code >= 500
+        ):
             confirmed_saved = await self.verify_remote_state(
                 tx_id, max_wait_seconds=settings.VERIFICATION_WINDOW_SECONDS
             )
             if confirmed_saved:
-                logger.info("Delayed post confirmed saved for %s during verification window.", tx_id)
+                logger.info(
+                    "Delayed post confirmed saved for %s during verification window.",
+                    tx_id,
+                )
                 async with async_session_maker() as session:
                     await self.tx_repo.mark_completed(session, tx_id)
                     await session.commit()
@@ -183,7 +198,9 @@ class TransactionWorker:
                 metrics_collector.record_retry()
             else:
                 final_err = post_res.error or "Exceeded maximum retry attempts"
-                logger.error("Terminal failure for transaction %s: %s", tx_id, final_err)
+                logger.error(
+                    "Terminal failure for transaction %s: %s", tx_id, final_err
+                )
                 await self.tx_repo.mark_failed(session, tx_id, final_err)
                 await session.commit()
                 metrics_collector.record_failed()
@@ -197,14 +214,21 @@ class TransactionWorker:
 
         while self._is_running:
             try:
-                job_data = await self.queue.dequeue(timeout_seconds=settings.WORKER_POLL_TIMEOUT_SECONDS)
+                job_data = await self.queue.dequeue(
+                    timeout_seconds=settings.WORKER_POLL_TIMEOUT_SECONDS
+                )
                 if job_data:
                     await self.process_job(job_data)
             except asyncio.CancelledError:
                 logger.info("Worker %s received cancellation signal.", self.worker_id)
                 break
             except Exception as exc:
-                logger.error("Worker %s encountered unhandled error: %s", self.worker_id, exc, exc_info=True)
+                logger.error(
+                    "Worker %s encountered unhandled error: %s",
+                    self.worker_id,
+                    exc,
+                    exc_info=True,
+                )
                 await asyncio.sleep(1.0)
 
     def stop(self) -> None:

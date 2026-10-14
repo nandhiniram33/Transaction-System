@@ -14,6 +14,7 @@ settings = get_settings()
 @dataclass
 class PostingResponse:
     """Standardized result of a remote posting service operation."""
+
     success: bool
     status_code: Optional[int] = None
     data: Optional[Dict[str, Any]] = None
@@ -68,7 +69,9 @@ class PostingServiceClient:
             logger.warning("Timeout querying transaction %s: %s", transaction_id, exc)
             return PostingResponse(success=False, is_timeout=True, error=str(exc))
         except httpx.RequestError as exc:
-            logger.warning("Network error querying transaction %s: %s", transaction_id, exc)
+            logger.warning(
+                "Network error querying transaction %s: %s", transaction_id, exc
+            )
             return PostingResponse(success=False, is_network_error=True, error=str(exc))
 
     async def post_transaction(self, payload: Dict[str, Any]) -> PostingResponse:
@@ -94,10 +97,18 @@ class PostingServiceClient:
                     error=f"POST failed with HTTP {resp.status_code}: {resp.text}",
                 )
         except httpx.TimeoutException as exc:
-            logger.warning("Timeout executing POST /transactions for %s: %s", payload.get("id"), exc)
+            logger.warning(
+                "Timeout executing POST /transactions for %s: %s",
+                payload.get("id"),
+                exc,
+            )
             return PostingResponse(success=False, is_timeout=True, error=str(exc))
         except httpx.RequestError as exc:
-            logger.warning("Network error executing POST /transactions for %s: %s", payload.get("id"), exc)
+            logger.warning(
+                "Network error executing POST /transactions for %s: %s",
+                payload.get("id"),
+                exc,
+            )
             return PostingResponse(success=False, is_network_error=True, error=str(exc))
 
     async def cleanup(self) -> bool:

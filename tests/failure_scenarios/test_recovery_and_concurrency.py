@@ -32,9 +32,11 @@ def mock_client_app():
 
 
 @pytest.mark.asyncio
-async def test_concurrent_worker_claim_deduplication(db_session: AsyncSession, mock_client_app: PostingServiceClient):
+async def test_concurrent_worker_claim_deduplication(
+    db_session: AsyncSession, mock_client_app: PostingServiceClient
+):
     """Scenario: Two concurrent workers try to process the same queued transaction simultaneously.
-    
+
     Only ONE worker must acquire the lease and submit to the remote service.
     Zero duplicate remote writes must occur.
     """
@@ -76,7 +78,7 @@ async def test_concurrent_worker_claim_deduplication(db_session: AsyncSession, m
 @pytest.mark.asyncio
 async def test_reconciliation_recovers_crashed_worker(db_session: AsyncSession):
     """Scenario: Worker crashes during processing, leaving an unexpired or expired lease.
-    
+
     The ReconciliationWorker must identify the expired lease, revert state to pending,
     and re-enqueue the job so it is not lost.
     """
@@ -121,7 +123,7 @@ async def test_reconciliation_recovers_crashed_worker(db_session: AsyncSession):
 @pytest.mark.asyncio
 async def test_outbox_survives_redis_outage(db_session: AsyncSession):
     """Scenario: Redis queue is temporarily unreachable when transaction is accepted.
-    
+
     Transactional outbox must keep records safely in SQLite until Redis becomes reachable again.
     """
     tx_id = str(uuid.uuid4())
@@ -158,9 +160,11 @@ async def test_outbox_survives_redis_outage(db_session: AsyncSession):
 
 
 @pytest.mark.asyncio
-async def test_terminal_failure_after_max_retries(db_session: AsyncSession, mock_client_app: PostingServiceClient):
+async def test_terminal_failure_after_max_retries(
+    db_session: AsyncSession, mock_client_app: PostingServiceClient
+):
     """Scenario: Remote service persistently fails past maximum retry attempts.
-    
+
     Transaction must be marked as 'failed' with error explanation.
     """
     mock_server.FAILURE_MODE = "pre_write_failure"
@@ -205,9 +209,11 @@ async def test_terminal_failure_after_max_retries(db_session: AsyncSession, mock
 
 
 @pytest.mark.asyncio
-async def test_recovery_within_30_seconds(db_session: AsyncSession, mock_client_app: PostingServiceClient):
+async def test_recovery_within_30_seconds(
+    db_session: AsyncSession, mock_client_app: PostingServiceClient
+):
     """Scenario: Worker dies while holding a transaction lease.
-    
+
     Verifies that the system completely detects, reclaims, re-enqueues,
     and successfully processes the transaction well within the strict 30-second SLA limit.
     """
@@ -252,7 +258,9 @@ async def test_recovery_within_30_seconds(db_session: AsyncSession, mock_client_
     assert job["id"] == tx_id
 
     mock_server.FAILURE_MODE = None
-    new_worker = TransactionWorker(worker_id="active-worker-replacement", p_client=mock_client_app)
+    new_worker = TransactionWorker(
+        worker_id="active-worker-replacement", p_client=mock_client_app
+    )
     processed = await new_worker.process_job(job)
     assert processed is True
 
@@ -266,9 +274,11 @@ async def test_recovery_within_30_seconds(db_session: AsyncSession, mock_client_
 
 
 @pytest.mark.asyncio
-async def test_prevention_of_duplicate_remote_transactions(db_session: AsyncSession, mock_client_app: PostingServiceClient):
+async def test_prevention_of_duplicate_remote_transactions(
+    db_session: AsyncSession, mock_client_app: PostingServiceClient
+):
     """Scenario: Multiple duplicate deliveries, network drops, and post-write 500 errors.
-    
+
     Guarantees that regardless of retries or re-enqueues, the remote posting service
     receives at most 1 write and ends with exactly ONE record in its database.
     """
@@ -311,7 +321,7 @@ async def test_prevention_of_duplicate_remote_transactions(db_session: AsyncSess
 @pytest.mark.asyncio
 async def test_queue_overflow_and_backpressure_recovery(db_session: AsyncSession):
     """Scenario: Message queue experiences overflow / connection refusal.
-    
+
     Verifies that the Transactional Outbox pattern guarantees zero data loss:
     all transaction records and outbox events remain safely persisted in SQLite WAL,
     and once queue capacity recovers, all pending events are safely dispatched in batch.
@@ -332,7 +342,9 @@ async def test_queue_overflow_and_backpressure_recovery(db_session: AsyncSession
         async def enqueue_batch(self, payloads):
             return 0  # Rejects enqueue due to full queue
 
-    overflow_dispatcher = OutboxDispatcher(q_client=OverflowQueueClient(), batch_size=10)
+    overflow_dispatcher = OutboxDispatcher(
+        q_client=OverflowQueueClient(), batch_size=10
+    )
     dispatched = await overflow_dispatcher.dispatch_cycle(db_session)
     assert dispatched == 0
 

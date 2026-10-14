@@ -64,7 +64,9 @@ class ReconciliationWorker:
             recovered_count += 1
 
         await session.commit()
-        logger.info("Successfully recovered %d stale processing transactions", recovered_count)
+        logger.info(
+            "Successfully recovered %d stale processing transactions", recovered_count
+        )
         return recovered_count
 
     async def dispatch_due_retries(self, session: AsyncSession) -> int:
@@ -114,9 +116,7 @@ class ReconciliationWorker:
     async def run_loop(self) -> None:
         """Continuous background reconciliation loop."""
         self._is_running = True
-        logger.info(
-            "Reconciliation worker started (interval=%ss)", self.poll_interval
-        )
+        logger.info("Reconciliation worker started (interval=%ss)", self.poll_interval)
 
         while self._is_running:
             try:

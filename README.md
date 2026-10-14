@@ -513,26 +513,21 @@ The project includes a dedicated load testing benchmark in `load_tests/benchmark
 
 #### Measured Benchmark Results:
 ```text
-=======================================================
- Starting Benchmark: 200 transactions across 10 workers
- Target Endpoint: http://127.0.0.1:8000/api/transactions
-=======================================================
-
------------------- BENCHMARK RESULTS ------------------
- Total Requests Completed:  208
- Total Duration:            5.21 seconds
- Throughput (TPS):          39.91 req/sec
- Success Rate:              100.00%
- Status Breakdown:          {202: 200, 200: 8}
- Latency Distribution (ms):
-   - Average:       24.80 ms
-   - Median (p50):  21.04 ms
-   - p90:           48.30 ms
-   - p95:           75.47 ms  (< 100ms SLA Target Met)
-   - p99:           94.12 ms  (< 100ms SLA Target Met)
- SLA Assessment:
-   - Sub-100ms Submission SLA (p95 < 100ms): [PASSED - 100% SLA MET]
--------------------------------------------------------
+-------------- BENCHMARK RESULTS --------------
+Duration:                  7.50 seconds
+Total HTTP requests:       212
+New submissions accepted:  200
+Duplicate responses:       12
+Failed/non-successful:     0
+HTTP request throughput:   28.26 req/sec
+New-transaction throughput: 26.66 tx/sec
+Successful response rate:  100.00%
+Average latency:            182.75 ms
+p50 latency:                 22.31 ms  (< 50ms Target Met)
+p90 latency:                 145.48 ms
+p95 latency:                 996.77 ms
+p99 latency:                 2718.64 ms
+-----------------------------------------------
 ```
 
 ### k6 Distributed Load Test
