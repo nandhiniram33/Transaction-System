@@ -61,8 +61,8 @@ class TransactionService:
             ConflictException: If transaction ID exists with conflicting payload data.
         """
         # Check outbox overflow before accepting transaction
-        from app.repositories.outbox_repository import OutboxRepository
         from app.core.config import get_settings
+        from app.repositories.outbox_repository import OutboxRepository
 
         outbox_repo = OutboxRepository()
         pending = await outbox_repo.get_pending_count(session)
@@ -72,6 +72,7 @@ class TransactionService:
                 status_code=429,
                 detail=f"Outbox pending count {pending} exceeds limit {max_outbox}",
             )
+
         fingerprint = request.compute_fingerprint()
         now = datetime.now(timezone.utc)
 
