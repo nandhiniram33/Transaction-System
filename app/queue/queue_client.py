@@ -70,6 +70,11 @@ class QueueClient:
     async def is_connected(self) -> bool:
         """Check if Redis connection is active."""
         if self._redis is None:
+            try:
+                await self.connect()
+            except Exception:
+                return False
+        if self._redis is None:
             return False
         try:
             return bool(await self._redis.ping())

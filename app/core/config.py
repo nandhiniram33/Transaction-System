@@ -23,9 +23,16 @@ class Settings(BaseSettings):
     API_PORT: int = 8000
 
     # Database Settings
+    # SQLite (default): sqlite+aiosqlite:///./data/transactions.db
+    # PostgreSQL (1,000+ TPS): postgresql+asyncpg://user:pass@host/dbname
     DATABASE_URL: str = "sqlite+aiosqlite:///./data/transactions.db"
     SYNC_DATABASE_URL: str = "sqlite:///./data/transactions.db"
     SQL_ECHO: bool = False
+
+    # PostgreSQL Connection Pool (ignored when using SQLite)
+    DB_POOL_SIZE: int = 20
+    DB_MAX_OVERFLOW: int = 40
+    DB_POOL_RECYCLE_SECONDS: int = 300
 
     # Redis Queue Settings
     REDIS_URL: str = "fakeredis://"
@@ -45,8 +52,10 @@ class Settings(BaseSettings):
 
     # Outbox & Dispatcher Settings
     OUTBOX_BATCH_SIZE: int = 100
-    OUTBOX_POLL_INTERVAL_SECONDS: float = 0.2
+    OUTBOX_POLL_INTERVAL_SECONDS: float = 0.1
     QUEUE_OVERFLOW_MAX_OUTBOX: int = 50000
+    OUTBOX_RETENTION_SECONDS: int = 86400
+    CLEANUP_INTERVAL_SECONDS: float = 300.0
 
     # Worker & Reconciliation Settings
     WORKER_CONCURRENCY: int = 5

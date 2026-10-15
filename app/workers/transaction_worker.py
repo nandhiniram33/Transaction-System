@@ -93,11 +93,11 @@ class TransactionWorker:
                 return False
             await session.commit()
 
-        # 2. Query Mock Service: GET /transactions/{id}
+        # 2. GET-before-POST verification: Check if transaction already exists in remote service
         get_res = await self.posting_client.get_transaction(tx_id)
         if get_res.success:
             logger.info(
-                "Transaction %s already exists in posting service. Marking completed.",
+                "Transaction %s already exists in posting service before POST. Marking completed.",
                 tx_id,
             )
             async with async_session_maker() as session:
@@ -106,7 +106,6 @@ class TransactionWorker:
             metrics_collector.record_completed()
             return True
 
-        # 3. If missing, submit transaction: POST /transactions
         post_payload = {
             "id": tx_id,
             "amount": float(job_data["amount"]),

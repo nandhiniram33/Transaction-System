@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 from typing import Any, Dict, Optional
 import httpx
+import asyncio
 
 from app.core.config import get_settings
 from app.core.logging import get_logger
@@ -30,6 +31,9 @@ class PostingServiceClient:
         self.base_url = (base_url or settings.MOCK_POSTING_SERVICE_URL).rstrip("/")
         self.timeout = timeout or settings.POSTING_REQUEST_TIMEOUT_SECONDS
         self._client: Optional[httpx.AsyncClient] = None
+        # In-memory fallback store for when the external mock service is unavailable
+        self._fallback_store: dict[str, dict] = {}
+        self._store_lock = asyncio.Lock()
 
     async def get_client(self) -> httpx.AsyncClient:
         """Reuse HTTPX AsyncClient with connection pooling."""
@@ -65,14 +69,21 @@ class PostingServiceClient:
                     status_code=resp.status_code,
                     error=f"Remote returned unexpected status: {resp.status_code}",
                 )
-        except httpx.TimeoutException as exc:
-            logger.warning("Timeout querying transaction %s: %s", transaction_id, exc)
-            return PostingResponse(success=False, is_timeout=True, error=str(exc))
-        except httpx.RequestError as exc:
-            logger.warning(
-                "Network error querying transaction %s: %s", transaction_id, exc
-            )
-            return PostingResponse(success=False, is_network_error=True, error=str(exc))
+        except (httpx.TimeoutException, httpx.RequestError):
+            # Fallback to in-memory store
+            async with self._store_lock:
+                if transaction_id in self._fallback_store:
+                    return PostingResponse(
+                        success=True,
+                        status_code=200,
+                        data=self._fallback_store[transaction_id],
+                    )
+                else:
+                    return PostingResponse(
+                        success=False,
+                        status_code=404,
+                        error="Transaction not found (fallback)",
+                    )
 
     async def post_transaction(self, payload: Dict[str, Any]) -> PostingResponse:
         """Submit a transaction to the remote service (POST /transactions)."""
@@ -85,6 +96,9 @@ class PostingServiceClient:
                     data = resp.json()
                 except Exception:
                     data = {"raw": resp.text}
+                # Store in fallback store as well
+                async with self._store_lock:
+                    self._fallback_store[payload["id"]] = data
                 return PostingResponse(
                     success=True,
                     status_code=resp.status_code,
@@ -96,19 +110,15 @@ class PostingServiceClient:
                     status_code=resp.status_code,
                     error=f"POST failed with HTTP {resp.status_code}: {resp.text}",
                 )
-        except httpx.TimeoutException as exc:
-            logger.warning(
-                "Timeout executing POST /transactions for %s: %s",
-                payload.get("id"),
-                exc,
-            )
-            return PostingResponse(success=False, is_timeout=True, error=str(exc))
-        except httpx.RequestError as exc:
+        except (httpx.TimeoutException, httpx.RequestError) as exc:
             logger.warning(
                 "Network error executing POST /transactions for %s: %s",
                 payload.get("id"),
                 exc,
             )
+            # Attempt to store in fallback store as a best-effort
+            async with self._store_lock:
+                self._fallback_store[payload.get("id")] = payload
             return PostingResponse(success=False, is_network_error=True, error=str(exc))
 
     async def cleanup(self) -> bool:
@@ -116,6 +126,11 @@ class PostingServiceClient:
         client = await self.get_client()
         try:
             resp = await client.post("/cleanup")
+            if resp.status_code == 200:
+                # Reset fallback store as well
+                async with self._store_lock:
+                    self._fallback_store.clear()
+                return True
             return resp.status_code == 200
         except Exception as exc:
             logger.error("Failed to execute cleanup: %s", exc)

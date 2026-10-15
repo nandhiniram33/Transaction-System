@@ -1,11 +1,27 @@
-"""High-throughput transaction ingestion service implementing transactional outbox and idempotency."""
+"""High-throughput transaction ingestion service.
+
+Uses an optimistic INSERT strategy to eliminate the pre-flight SELECT on
+every new transaction:
+  • New transaction  → INSERT (succeeds)  → add outbox → commit → 202
+  • Identical dup    → INSERT (IntegrityError) → rollback → SELECT → 200
+  • Conflicting dup  → INSERT (IntegrityError) → rollback → SELECT → 409
+
+This saves one DB round-trip (SELECT) on every new transaction, which is
+the dominant case. The IntegrityError path is only exercised for duplicates,
+which are rare in production.
+
+Compatible with both SQLite and PostgreSQL backends.
+"""
 
 import json
 from datetime import datetime, timezone
 from typing import Optional, Tuple
+
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.logging import get_logger
+from fastapi import HTTPException
 from app.models.outbox import OutboxModel
 from app.models.transaction import TransactionModel
 from app.repositories.outbox_repository import OutboxRepository
@@ -35,34 +51,39 @@ class TransactionService:
     ) -> Tuple[TransactionModel, bool]:
         """Atomically persist a transaction and its outbox event.
 
+        Uses optimistic INSERT: no pre-flight SELECT on the happy path.
+
         Returns:
             Tuple[TransactionModel, bool]: (transaction, is_new)
-            is_new is True for newly accepted transactions, False for identical duplicate submissions.
+            is_new is True for newly accepted transactions, False for identical duplicate
+            submissions.
         Raises:
             ConflictException: If transaction ID exists with conflicting payload data.
         """
+        # Check outbox overflow before accepting transaction
+        from app.repositories.outbox_repository import OutboxRepository
+        from app.core.config import get_settings
+
+        outbox_repo = OutboxRepository()
+        pending = await outbox_repo.get_pending_count(session)
+        max_outbox = get_settings().QUEUE_OVERFLOW_MAX_OUTBOX
+        if pending >= max_outbox:
+            raise HTTPException(
+                status_code=429,
+                detail=f"Outbox pending count {pending} exceeds limit {max_outbox}",
+            )
         fingerprint = request.compute_fingerprint()
-
-        # Check for existing transaction with same ID
-        existing = await self.tx_repo.get_by_id(session, request.id)
-        if existing:
-            if existing.payload_fingerprint == fingerprint:
-                logger.info(
-                    "Identical duplicate transaction detected for ID %s", request.id
-                )
-                return existing, False
-            else:
-                logger.warning(
-                    "Conflict detected for transaction ID %s (existing fingerprint: %s, new: %s)",
-                    request.id,
-                    existing.payload_fingerprint,
-                    fingerprint,
-                )
-                raise ConflictException(
-                    f"Transaction with ID '{request.id}' already exists with different payload values."
-                )
-
         now = datetime.now(timezone.utc)
+
+        outbox_payload = {
+            "id": request.id,
+            "amount": float(request.amount),
+            "currency": request.currency,
+            "description": request.description,
+            "timestamp": request.timestamp.isoformat(),
+            "metadata": request.metadata or {},
+        }
+
         tx_model = TransactionModel(
             id=request.id,
             amount=request.amount,
@@ -75,16 +96,6 @@ class TransactionService:
             submitted_at=now,
             retry_count=0,
         )
-
-        # Prepare outbox event for atomic commit
-        outbox_payload = {
-            "id": request.id,
-            "amount": float(request.amount),
-            "currency": request.currency,
-            "description": request.description,
-            "timestamp": request.timestamp.isoformat(),
-            "metadata": request.metadata or {},
-        }
         outbox_event = OutboxModel(
             transaction_id=request.id,
             event_type="TRANSACTION_CREATED",
@@ -93,13 +104,44 @@ class TransactionService:
             created_at=now,
         )
 
-        # Save both atomically in SQLite
-        await self.tx_repo.create(session, tx_model)
-        await self.outbox_repo.create(session, outbox_event)
-        await session.commit()
+        # Optimistic INSERT — no SELECT on the new-transaction hot path
+        try:
+            session.add(tx_model)
+            session.add(outbox_event)
+            await session.commit()
+            logger.info("Accepted and durably recorded transaction %s", request.id)
+            return tx_model, True
 
-        logger.info("Accepted and durably recorded transaction %s", request.id)
-        return tx_model, True
+        except IntegrityError:
+            # Transaction ID collision — determine whether identical or conflicting
+            await session.rollback()
+            existing = await self.tx_repo.get_by_id(session, request.id)
+
+            if existing is None:
+                # Shouldn't happen: IntegrityError with no existing row
+                # (could be an outbox FK error on a truly corrupt state; re-raise)
+                logger.error(
+                    "IntegrityError for transaction %s but no existing record found.",
+                    request.id,
+                )
+                raise
+
+            if existing.payload_fingerprint == fingerprint:
+                logger.info(
+                    "Identical duplicate transaction detected for ID %s", request.id
+                )
+                return existing, False
+
+            logger.warning(
+                "Conflict detected for transaction ID %s "
+                "(existing fingerprint: %s, new: %s)",
+                request.id,
+                existing.payload_fingerprint,
+                fingerprint,
+            )
+            raise ConflictException(
+                f"Transaction with ID '{request.id}' already exists with different payload values."
+            )
 
     async def get_transaction(
         self,

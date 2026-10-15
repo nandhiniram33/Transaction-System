@@ -14,6 +14,7 @@ from app.database.db import close_db, init_db
 from app.queue.dispatcher import outbox_dispatcher
 from app.queue.queue_client import queue_client
 from app.services.posting_service_client import posting_client
+from app.workers.cleanup_worker import cleanup_worker
 from app.workers.reconciliation_worker import reconciliation_worker
 from app.workers.transaction_worker import TransactionWorker
 
@@ -51,6 +52,10 @@ async def lifespan(app: FastAPI):
         workers.append(w)
         _background_tasks.append(w_task)
 
+    # 6. Start background outbox cleanup worker
+    cleanup_task = asyncio.create_task(cleanup_worker.run_loop())
+    _background_tasks.append(cleanup_task)
+
     logger.info("All background tasks and workers initialized successfully.")
 
     yield
@@ -59,6 +64,7 @@ async def lifespan(app: FastAPI):
     logger.info("Initiating graceful shutdown...")
     outbox_dispatcher.stop()
     reconciliation_worker.stop()
+    cleanup_worker.stop()
     for w in workers:
         w.stop()
 

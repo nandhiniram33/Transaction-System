@@ -125,7 +125,7 @@ async def run_benchmark(
     if latencies:
         print(f"Average latency:           {statistics.mean(latencies):.2f} ms")
         for p in (0.50, 0.90, 0.95, 0.99):
-            mark = " ✓ <100ms" if percentile(latencies.copy(), p) < 100 else ""
+            mark = " [OK <100ms]" if percentile(latencies.copy(), p) < 100 else ""
             print(
                 f"p{int(p * 100):<2} latency:              {percentile(latencies.copy(), p):.2f} ms{mark}"
             )

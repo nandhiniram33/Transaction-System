@@ -8,6 +8,7 @@ from app.core.logging import get_logger, setup_logging
 from app.database.db import close_db, init_db
 from app.queue.queue_client import queue_client
 from app.services.posting_service_client import posting_client
+from app.workers.cleanup_worker import cleanup_worker
 from app.workers.reconciliation_worker import reconciliation_worker
 from app.workers.transaction_worker import TransactionWorker
 
@@ -41,8 +42,9 @@ async def main():
         workers.append(w)
         tasks.append(asyncio.create_task(w.run_loop()))
 
-    # Also run reconciliation in the background
+    # Also run reconciliation and outbox cleanup in the background
     tasks.append(asyncio.create_task(reconciliation_worker.run_loop()))
+    tasks.append(asyncio.create_task(cleanup_worker.run_loop()))
 
     logger.info(
         "Worker pool active with %d workers. Awaiting jobs...",
@@ -61,6 +63,7 @@ async def main():
         for w in workers:
             w.stop()
         reconciliation_worker.stop()
+        cleanup_worker.stop()
         for t in tasks:
             t.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
