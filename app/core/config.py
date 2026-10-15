@@ -30,8 +30,8 @@ class Settings(BaseSettings):
     SQL_ECHO: bool = False
 
     # PostgreSQL Connection Pool (ignored when using SQLite)
-    DB_POOL_SIZE: int = 20
-    DB_MAX_OVERFLOW: int = 40
+    DB_POOL_SIZE: int = 50
+    DB_MAX_OVERFLOW: int = 50
     DB_POOL_RECYCLE_SECONDS: int = 300
 
     # Redis Queue Settings

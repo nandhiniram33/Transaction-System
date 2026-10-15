@@ -46,12 +46,12 @@ services:
       - postgres-data:/var/lib/postgresql/data
     command: >
       postgres
-        -c max_connections=200
-        -c shared_buffers=256MB
-        -c effective_cache_size=512MB
-        -c work_mem=4MB
+        -c max_connections=400
+        -c shared_buffers=512MB
+        -c effective_cache_size=1GB
+        -c work_mem=8MB
         -c synchronous_commit=off
-        -c wal_buffers=16MB
+        -c wal_buffers=32MB
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U txuser -d transactions"]
@@ -111,22 +111,24 @@ services:
       - "8001:8000"
     command: >
       sh -c "alembic upgrade head &&
-             uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1"
+             uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 8 --no-access-log"
     restart: unless-stopped
+    volumes:
+      - ./app:/app/app
     environment:
       - APP_ENV=production
       - LOG_LEVEL=INFO
       - DATABASE_URL=postgresql+asyncpg://txuser:txpass@postgres:5432/transactions
       - SYNC_DATABASE_URL=postgresql+psycopg2://txuser:txpass@postgres:5432/transactions
       - DB_POOL_SIZE=20
-      - DB_MAX_OVERFLOW=40
+      - DB_MAX_OVERFLOW=15
       - DB_POOL_RECYCLE_SECONDS=300
       - REDIS_URL=redis://redis:6379/0
       - REDIS_QUEUE_NAME=transaction_processing_queue
       - MOCK_POSTING_SERVICE_URL=http://mock-posting-service:8080
       - POSTING_REQUEST_TIMEOUT_SECONDS=15.0
       - MAX_RETRY_ATTEMPTS=5
-      - WORKER_CONCURRENCY=10
+      - WORKER_CONCURRENCY=0
       - OUTBOX_POLL_INTERVAL_SECONDS=0.1
       - OUTBOX_BATCH_SIZE=100
     depends_on:
@@ -142,6 +144,35 @@ services:
       timeout: 5s
       retries: 5
       start_period: 15s
+
+  # Dedicated Background Worker Process for PostgreSQL
+  worker-postgres:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: transaction-worker-postgres
+    profiles: ["postgres"]
+    command: ["python", "-m", "app.workers.run_worker"]
+    restart: unless-stopped
+    volumes:
+      - ./app:/app/app
+    environment:
+      - APP_ENV=production
+      - LOG_LEVEL=INFO
+      - DATABASE_URL=postgresql+asyncpg://txuser:txpass@postgres:5432/transactions
+      - SYNC_DATABASE_URL=postgresql+psycopg2://txuser:txpass@postgres:5432/transactions
+      - REDIS_URL=redis://redis:6379/0
+      - REDIS_QUEUE_NAME=transaction_processing_queue
+      - MOCK_POSTING_SERVICE_URL=http://mock-posting-service:8080
+      - POSTING_REQUEST_TIMEOUT_SECONDS=15.0
+      - WORKER_CONCURRENCY=10
+      - PROCESSING_LEASE_TIMEOUT_SECONDS=20.0
+      - RECONCILIATION_INTERVAL_SECONDS=2.0
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
 
   # Dedicated Background Worker Process
   worker:

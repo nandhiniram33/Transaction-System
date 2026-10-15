@@ -62,6 +62,8 @@ async def submit_transaction(
             error=tx_model.error,
         )
 
+    except HTTPException:
+        raise
     except ConflictException as exc:
         metrics_collector.record_conflict()
         raise HTTPException(

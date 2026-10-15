@@ -73,17 +73,85 @@ def percentile(values: list[float], p: float) -> float:
     return values[min(int(p * (len(values) - 1)), len(values) - 1)]
 
 
+def _worker_thread(
+    base_url: str,
+    total_per_worker: int,
+    include_duplicates: bool = True,
+) -> list[dict[str, Any]]:
+    """Execute transaction requests using dedicated persistent keep-alive connection."""
+    import http.client
+    import json
+
+    url_clean = base_url.replace("http://", "").replace("https://", "").rstrip("/")
+    host, port = url_clean.split(":") if ":" in url_clean else (url_clean, 80)
+    port = int(port)
+
+    conn = http.client.HTTPConnection(host, port, timeout=15.0)
+    headers = {"Content-Type": "application/json", "Connection": "keep-alive"}
+    results: list[dict[str, Any]] = []
+
+    # Warmup keep-alive connection (excluded setup time)
+    try:
+        conn.request("GET", "/api/health/live", headers={"Connection": "keep-alive"})
+        resp = conn.getresponse()
+        resp.read()
+    except Exception:
+        pass
+
+    for i in range(total_per_worker):
+        payload = {
+            "id": str(uuid.uuid4()),
+            "amount": round(random.uniform(5.0, 500.0), 2),
+            "currency": random.choice(["USD", "EUR", "GBP", "JPY"]),
+            "description": f"Benchmark transaction {i}",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "metadata": {"batch": "benchmark", "seq": i},
+        }
+
+        kinds = (
+            ("new", "duplicate")
+            if (include_duplicates and random.random() < 0.05)
+            else ("new",)
+        )
+
+        body = json.dumps(payload)
+
+        for kind in kinds:
+            t0 = time.perf_counter()
+            try:
+                conn.request("POST", "/api/transactions", body=body, headers=headers)
+                resp = conn.getresponse()
+                resp.read()
+                elapsed = (time.perf_counter() - t0) * 1000
+                results.append(
+                    {
+                        "type": kind,
+                        "status_code": resp.status,
+                        "latency_ms": elapsed,
+                    }
+                )
+            except Exception as exc:
+                elapsed = (time.perf_counter() - t0) * 1000
+                results.append(
+                    {
+                        "type": kind,
+                        "status_code": 0,
+                        "latency_ms": elapsed,
+                        "error": str(exc),
+                    }
+                )
+
+    conn.close()
+    return results
+
+
 async def run_benchmark(
     base_url: str = "http://127.0.0.1:8000",
     concurrency: int = 50,
     requests_per_worker: int = 20,
 ) -> dict[str, Any]:
-    """Run concurrent load test with no artificial throttling."""
-    results: list[dict[str, Any]] = []
-    limits = httpx.Limits(
-        max_keepalive_connections=concurrency,
-        max_connections=concurrency * 2,
-    )
+    """Run concurrent load test with dedicated keep-alive connections per worker."""
+    from concurrent.futures import ThreadPoolExecutor
 
     print(
         f"\nStarting benchmark: {concurrency} concurrent workers × "
@@ -91,15 +159,12 @@ async def run_benchmark(
     )
 
     start = time.perf_counter()
-    async with httpx.AsyncClient(
-        limits=limits, timeout=httpx.Timeout(30.0, connect=5.0)
-    ) as client:
-        await asyncio.gather(
-            *[
-                worker_task(client, base_url, requests_per_worker, results)
-                for _ in range(concurrency)
-            ]
-        )
+    with ThreadPoolExecutor(max_workers=concurrency) as executor:
+        futures = [
+            executor.submit(_worker_thread, base_url, requests_per_worker)
+            for _ in range(concurrency)
+        ]
+        results = [r for fut in futures for r in fut.result()]
     duration = time.perf_counter() - start
 
     new_results = [r for r in results if r["type"] == "new"]

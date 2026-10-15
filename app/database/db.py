@@ -30,6 +30,32 @@ settings = get_settings()
 _is_postgresql: bool = settings.DATABASE_URL.startswith("postgresql")
 _is_sqlite: bool = "sqlite" in settings.DATABASE_URL
 
+_asyncpg_pool = None
+
+
+async def get_asyncpg_pool():
+    """Returns or initialises a native asyncpg pool for PostgreSQL high-throughput writes."""
+    global _asyncpg_pool
+    if _asyncpg_pool is None and _is_postgresql:
+        try:
+            import asyncpg
+
+            clean_url = settings.DATABASE_URL.replace(
+                "postgresql+asyncpg://", "postgresql://"
+            )
+            _asyncpg_pool = await asyncpg.create_pool(
+                clean_url,
+                min_size=settings.DB_POOL_SIZE,
+                max_size=settings.DB_POOL_SIZE + settings.DB_MAX_OVERFLOW,
+                command_timeout=10.0,
+                server_settings={"timezone": "UTC"},
+            )
+            logger.info("Native asyncpg connection pool established for PostgreSQL")
+        except Exception as exc:
+            logger.warning("Could not establish native asyncpg pool: %s", exc)
+            _asyncpg_pool = None
+    return _asyncpg_pool
+
 
 def _build_engine() -> AsyncEngine:
     """Create the async SQLAlchemy engine for the configured database backend."""
@@ -46,7 +72,7 @@ def _build_engine() -> AsyncEngine:
             echo=settings.SQL_ECHO,
             pool_size=settings.DB_POOL_SIZE,
             max_overflow=settings.DB_MAX_OVERFLOW,
-            pool_pre_ping=True,
+            pool_pre_ping=False,
             pool_recycle=settings.DB_POOL_RECYCLE_SECONDS,
             # asyncpg connection init: set timezone
             connect_args={"server_settings": {"timezone": "UTC"}},
@@ -123,6 +149,8 @@ async def init_db() -> None:
         # For PostgreSQL: ensure FK enforcement (it's always on by default)
         if _is_postgresql:
             await conn.execute(text("SELECT 1"))
+    if _is_postgresql:
+        await get_asyncpg_pool()
     logger.info(
         "Database schema initialised (%s).",
         "PostgreSQL" if _is_postgresql else "SQLite",
@@ -131,5 +159,12 @@ async def init_db() -> None:
 
 async def close_db() -> None:
     """Dispose of engine connection pool on shutdown."""
+    global _asyncpg_pool
+    if _asyncpg_pool is not None:
+        try:
+            await _asyncpg_pool.close()
+        except Exception:
+            pass
+        _asyncpg_pool = None
     await engine.dispose()
     logger.info("Database connections closed.")

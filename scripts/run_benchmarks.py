@@ -44,12 +44,13 @@ def format_markdown_report(results: List[Dict[str, Any]], api_url: str) -> str:
     """Format benchmark results into Markdown table and summary."""
     now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
 
+    tiers_str = ", ".join(str(r['concurrency']) for r in results)
     md = [
         "# Transaction Processing System — Benchmark Results",
         "",
         f"**Date Recorded**: {now_iso}  ",
         f"**Target API**: `{api_url}`  ",
-        "**Concurrency Tiers Tested**: 10, 25, and 50 concurrent workers  ",
+        f"**Concurrency Tiers Tested**: {tiers_str} concurrent workers  ",
         "",
         "## 1. Measured Performance Metrics",
         "",
@@ -225,8 +226,8 @@ def main():
         "--concurrency-levels",
         nargs="+",
         type=int,
-        default=[10, 25, 50],
-        help="List of concurrency levels to evaluate (default: 10 25 50)",
+        default=[10, 25, 50, 100, 200],
+        help="List of concurrency levels to evaluate (default: 10 25 50 100 200)",
     )
     parser.add_argument(
         "--requests-per-worker",
